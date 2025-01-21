@@ -9,10 +9,7 @@ const int DAYLIGHT_OFFSET_SEC = 3600; // 1 hour DST offset
 // NeoPixel LED configuration
 const int LED_PIN = 48;     // WS2812 LED is on GPIO48
 const int NUM_LEDS = 1;     // Only one LED
-const int BRIGHTNESS = 20;  // Brightness level (0-255)
-const int RED_BRIGHTNESS = 20;
-const int GREEN_BRIGHTNESS = 20;
-const int BLUE_BRIGHTNESS = 20;
+const int BRIGHTNESS = 128;  // Brightness level (0-255)
 const int TRANSITION_SPEED = 10;  // Transition speed in ms
 
 // User location

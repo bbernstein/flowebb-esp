@@ -1,3 +1,9 @@
+/*
+ * Created on Tue Jan 21 2025
+ *
+ * Copyright (c) 2025 Your Company
+ */
+
 #include "LedController.h"
 
 Adafruit_NeoPixel LedController::pixel(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);

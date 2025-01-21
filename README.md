@@ -1,66 +1,132 @@
-# Getting Started with ESP32-S3 Development
+# ESP32-S3 Tide Tracker
 
-This guide will help you set up your ESP32-S3 development environment and get started with a basic project.
+An ESP32-S3 based tide tracking device that displays tide status using a NeoPixel LED. The LED color and animation indicate the current tide state (rising/falling) and time until the next tide extreme.
 
-## Prerequisites
+## Features
 
-1. Install ESP-IDF (Espressif IoT Development Framework)
-   - Download and install from: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/
-   - Follow the installation guide for your operating system
+- Real-time tide tracking using online tide API
+- Visual tide status indication using NeoPixel LED
+- Automatic time synchronization via NTP
+- Persistent storage of tide data
+- Automatic recovery and failsafe mechanisms
+- WiFi connectivity with connection monitoring
 
-2. Required Hardware
-   - ESP32-S3 development board
-   - USB Cable (USB-C or as per your board's requirement)
-   - Computer with ESP-IDF installed
+## Hardware Requirements
 
-## Project Setup
+- ESP32-S3 development board (tested with ESP32-S3-DevKitM-1)
+- WS2812B NeoPixel LED
+- USB-C cable for programming
+- Power supply (via USB or external)
 
-1. Set up ESP-IDF environment variables:
+## Dependencies
+
+- PlatformIO IDE
+- Arduino framework for ESP32-S3
+- Required libraries (automatically installed via PlatformIO):
+  - Adafruit NeoPixel
+  - Arduino_JSON
+
+## Setup Instructions
+
+1. Clone this repository:
    ```bash
-   . $HOME/esp/esp-idf/export.sh  # Linux/macOS
-   %userprofile%\esp\esp-idf\export.bat  # Windows
+   git clone https://github.com/bbernstein/flowebb-esp
+   cd flowebb-esp
    ```
 
-2. Create a new project:
+2. Copy and configure WiFi credentials:
    ```bash
-   idf.py create-project my_esp32s3_project
-   cd my_esp32s3_project
+   cp src/config/wifi_credentials.h.template src/config/wifi_credentials.h
+   ```
+   Edit `src/config/wifi_credentials.h` with your WiFi credentials and API endpoint.
+
+3. Configure your location:
+   Edit `src/config/config.h` and update:
+   - `LATITUDE` and `LONGITUDE` for your location
+   - `TIDE_STATION_ID` with your nearest NOAA tide station ID
+   - Time zone settings (`GMT_OFFSET_SEC` and `DAYLIGHT_OFFSET_SEC`)
+
+4. Build and upload using PlatformIO:
+   ```bash
+   pio run -t upload
    ```
 
-3. Configure your project:
+5. Monitor serial output:
    ```bash
-   idf.py set-target esp32s3
-   idf.py menuconfig
+   pio device monitor
    ```
 
-## Building and Flashing
+## LED Indicators
 
-1. Build the project:
-   ```bash
-   idf.py build
-   ```
+- Red -> Green: Rising tide
+- Green -> Red: Falling tide
+- Blue animation: Wave effect just to feel like the sea
 
-2. Flash to your device:
-   ```bash
-   idf.py -p (PORT) flash  # Replace (PORT) with your device's port (e.g., COM3 or /dev/ttyUSB0)
-   ```
+## Configuration
 
-3. Monitor the output:
-   ```bash
-   idf.py monitor
-   ```
+Key configuration files:
+- `src/config/config.h`: General configuration settings
+- `src/config/wifi_credentials.h`: Network and API credentials
+- `platformio.ini`: Build configuration and library dependencies
+
+## Development
+
+To modify or extend this project:
+
+1. Main application logic is in `src/main.cpp`
+2. LED control logic is in `src/display/LedController.cpp`
+3. Tide data processing is in `src/services/TideService.cpp`
+4. Data models are in `src/models/`
+
+## Troubleshooting
+
+1. LED not working:
+   - Check LED_PIN configuration in config.h
+   - Verify NeoPixel connections
+   - Try adjusting BRIGHTNESS setting
+
+2. WiFi connection issues:
+   - Verify credentials in wifi_credentials.h
+   - Check WiFi signal strength
+   - Monitor serial output for connection status
+
+3. No tide data:
+   - Verify TIDE_STATION_ID is correct
+   - Check API endpoint configuration
+   - Monitor serial output for API responses
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- NOAA for tide data
+- Adafruit for NeoPixel library
+- ESP32 community for various examples and inspiration
 
 ## Project Structure
 
-The main project files are:
-
-- `main/` - Contains your source code
-- `main/CMakeLists.txt` - Build system configuration
-- `main/component.mk` - Component make file
-- `sdkconfig` - Project configuration file
-
-## Additional Resources
-
-- [ESP32-S3 Technical Reference Manual](https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf)
-- [ESP-IDF Programming Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/)
-- [ESP32-S3 Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf)
+```
+esp32-tide-tracker/
+├── src/
+│   ├── main.cpp           # Main application code
+│   ├── config/           # Configuration files
+│   ├── display/          # LED control code
+│   ├── models/           # Data structures
+│   ├── services/         # Core services
+│   ├── storage/          # Data persistence
+│   └── utils/            # Utility functions
+├── lib/                  # Project libraries
+├── include/             # Header files
+├── test/                # Test files
+└── docs/                # Documentation
+```

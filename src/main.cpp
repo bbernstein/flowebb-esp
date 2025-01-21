@@ -122,5 +122,5 @@ void loop() {
         Serial.println("Caught exception in main loop");
     }
     
-    delay(1000); // Basic rate limiting
+    delay(10); // Basic rate limiting
 }
