@@ -1,18 +1,17 @@
+/*
+ * Created on Tue Jan 21 2025
+ *
+ * Copyright (c) 2025 Bernard Bernstein
+ */
+
 #include "TideService.h"
 #include "WiFiService.h"
-
-void TideService::feedWatchdog() {
-    // Simplified watchdog feed that works with Arduino framework
-    delay(1);  // Minimal yield to prevent watchdog from triggering
-}
 
 bool TideService::fetchTideData(TideData& tideData) {
     if (!WiFiService::isConnected()) {
         Serial.println("WiFi not connected");
         return false;
     }
-
-    feedWatchdog();
 
     Serial.println("Creating secure client...");
     std::unique_ptr<WiFiClientSecure> client(new WiFiClientSecure);
@@ -35,8 +34,6 @@ bool TideService::fetchTideData(TideData& tideData) {
     String url = buildApiUrl(startTime, endTime);
     Serial.printf("Fetching from URL: %s\n", url.c_str());
     
-    feedWatchdog();
-
     if (!http.begin(*client, url)) {
         Serial.println("HTTP begin failed");
         return false;
@@ -44,7 +41,6 @@ bool TideService::fetchTideData(TideData& tideData) {
     
     Serial.println("Starting HTTP GET...");
     int httpCode = http.GET();
-    feedWatchdog();
 
     if (httpCode != HTTP_CODE_OK) {
         Serial.printf("HTTP GET failed, error: %s\n", http.errorToString(httpCode).c_str());
@@ -56,8 +52,6 @@ bool TideService::fetchTideData(TideData& tideData) {
     String payload = http.getString();
     http.end();
 
-    feedWatchdog();
-    
     if (payload.length() == 0) {
         Serial.println("Empty response received");
         return false;
@@ -70,8 +64,6 @@ bool TideService::fetchTideData(TideData& tideData) {
         return false;
     }
 
-    feedWatchdog();
-
     // Update current tide data
     Serial.println("Updating tide data...");
     String typeStr = JSON.stringify(doc["tideType"]);
@@ -83,8 +75,6 @@ bool TideService::fetchTideData(TideData& tideData) {
     
     tideData.currentHeight = (double)doc["waterLevel"];
     tideData.lastUpdateTime = now;
-    
-    feedWatchdog();
 
     // Process tide extremes
     Serial.println("Processing extremes...");
@@ -129,8 +119,6 @@ void TideService::processTideExtremes(JSONVar& extremes, TideData& tideData, tim
     Serial.printf("Processing %d extremes...\n", (int)extremes.length());
     
     for (int i = 0; i < extremes.length(); i++) {
-        feedWatchdog();  // Feed watchdog during long loop
-        
         double rawTimestamp = (double)extremes[i]["timestamp"];
         time_t timestamp = (time_t)(rawTimestamp / 1000) - GMT_OFFSET_SEC - DAYLIGHT_OFFSET_SEC;
         if (timestamp <= now) {
@@ -151,14 +139,10 @@ void TideService::processTideExtremes(JSONVar& extremes, TideData& tideData, tim
         tideData.current.isHigh = typeStr.indexOf("HIGH") != -1;
     }
 
-    feedWatchdog();
-
     // Store future extremes
     Serial.println("Processing future extremes...");
     tideData.numExtremes = 0;
     for (int i = 0; i < extremes.length() && tideData.numExtremes < MAX_EXTREMES; i++) {
-        feedWatchdog();  // Feed watchdog during long loop
-        
         time_t timestamp = (time_t)((double)extremes[i]["timestamp"] / 1000);
         if (timestamp > now) {
             tideData.extremes[tideData.numExtremes].timestamp = timestamp;

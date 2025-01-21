@@ -1,3 +1,9 @@
+/*
+ * Created on Tue Jan 21 2025
+ *
+ * Copyright (c) 2025 Bernard Bernstein
+ */
+
 #include "TideData.h"
 
 TideData::TideData() : 

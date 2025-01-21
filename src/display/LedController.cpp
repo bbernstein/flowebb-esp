@@ -1,7 +1,7 @@
 /*
  * Created on Tue Jan 21 2025
  *
- * Copyright (c) 2025 Your Company
+ * Copyright (c) 2025 Bernard Bernstein
  */
 
 #include "LedController.h"
@@ -40,7 +40,7 @@ void LedController::updateDisplay(const TideData& tideData) {
     uint32_t color = calculateTideColor(progress, currentExtreme, nextExtreme);
     
     // Debug output (once per second)
-    if (currentMillis - lastPrintTime >= 1000) {
+    if (currentMillis - lastPrintTime >= 10000) {
         debugPrintStatus(progress, color, nextExtreme);
         lastPrintTime = currentMillis;
     }

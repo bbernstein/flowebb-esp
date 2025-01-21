@@ -1,3 +1,9 @@
+/*
+ * Created on Tue Jan 21 2025
+ *
+ * Copyright (c) 2025 Bernard Bernstein
+ */
+
 #include "WiFiService.h"
 
 void WiFiService::connect() {

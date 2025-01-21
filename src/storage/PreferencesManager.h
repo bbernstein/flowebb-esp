@@ -1,8 +1,8 @@
 #pragma once
 #include <Arduino.h>
 #include <Preferences.h>
-#include <Arduino_JSON.h>
 #include "../models/TideData.h"
+#include "../utils/JsonHelper.h"
 #include "../config/config.h"
 
 class PreferencesManager {
@@ -13,8 +13,4 @@ public:
     
 private:
     static Preferences preferences;
-    static JSONVar serializeTideData(const TideData& tideData);
-    static bool deserializeTideData(const JSONVar& json, TideData& tideData);
-    static JSONVar serializeTideExtreme(const TideExtreme& extreme);
-    static bool deserializeTideExtreme(const JSONVar& json, TideExtreme& extreme);
 };

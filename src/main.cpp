@@ -1,3 +1,10 @@
+/*
+ * Created on Tue Jan 21 2025
+ *
+ * Copyright (c) 2025 Bernard Bernstein
+ * MIT License - See LICENSE file in the project root for full license information.
+ */
+
 #include <Arduino.h>
 #include "config/config.h"
 #include "models/TideData.h"
