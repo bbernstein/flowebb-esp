@@ -26,14 +26,26 @@ void LedController::updateDisplay(const TideData& tideData) {
     unsigned long currentMillis = millis();
     
     // If we're past all stored extremes, return early
-    if (now > tideData.extremes[tideData.numExtremes - 1].timestamp) {
+    if (now > tideData.extremes[tideData.numExtremes - 2].timestamp) {
         return;
     }
 
-    // Calculate progress between current and next extreme
-    const TideExtreme& currentExtreme = tideData.current;
-    const TideExtreme& nextExtreme = tideData.extremes[0];
-    
+    TideExtreme currentExtreme = tideData.current;
+    int nextIndex = 0;
+    if (now > tideData.extremes[0].timestamp) {
+        // find last extreme before now
+        for (int i = tideData.numExtremes - 1; i >= 0; i--) {
+            if (tideData.extremes[i].timestamp <= now) {
+                currentExtreme = tideData.extremes[i];
+                nextIndex = i + 1;
+                break;
+            }
+        }
+    }
+
+    // set nextExtreme to the next extreme after now
+   const  TideExtreme& nextExtreme = tideData.extremes[nextIndex];
+
     // Calculate progress and update animation
     float progress = calculateTideProgress(currentExtreme, nextExtreme, now);
     updateWaveAnimation(currentMillis);
@@ -50,22 +62,8 @@ void LedController::updateDisplay(const TideData& tideData) {
 }
 
 float LedController::calculateTideProgress(const TideExtreme& current, const TideExtreme& next, time_t now) {
-    if (now < current.timestamp) {
-        return 0.0;
-    }
-    if (now > next.timestamp) {
-        return 1.0;
-    }
-    
     int64_t timeToNext = next.timestamp - now;
     int64_t totalTime = next.timestamp - current.timestamp;
-    
-    if (totalTime <= 0) {
-        return 0.0;
-    }
-    if (timeToNext > totalTime) {
-        return 0.0;
-    }
     
     return 1.0 - ((float)timeToNext / totalTime);
 }
@@ -96,6 +94,7 @@ uint32_t LedController::calculateTideColor(float progress, const TideExtreme& cu
 
     uint8_t red = (baseColor >> 16) & 0xFF;
     uint8_t green = (baseColor >> 8) & 0xFF;
+
     return ((uint32_t)red << 16) | ((uint32_t)green << 8) | currentBlueLevel;
 }
 
