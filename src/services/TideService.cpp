@@ -9,14 +9,20 @@
 
 bool TideService::fetchTideData(TideData& tideData) {
     if (!WiFiService::isConnected()) {
-        Serial.println("WiFi not connected");
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.println("WiFi not connected");
+        }
         return false;
     }
 
-    Serial.println("Creating secure client...");
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.println("Creating secure client...");
+    }
     std::unique_ptr<WiFiClientSecure> client(new WiFiClientSecure);
     if (!client) {
-        Serial.println("Failed to create client");
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.println("Failed to create client");
+        }
         return false;
     }
     
@@ -28,87 +34,142 @@ bool TideService::fetchTideData(TideData& tideData) {
     
     // Calculate time range
     time_t now = TimeService::getCurrentTime();
-    time_t startTime = now - (12 * 60 * 60); // 12 hours ago (reduced from 24)
-    time_t endTime = now + (12 * 60 * 60);   // 12 hours ahead
+    time_t startTime = now - (24 * 60 * 60); // 12 hours ago (reduced from 24)
+    time_t endTime = now + (24 * 5 * 60 * 60);   // 12 hours ahead
     
-    String url = buildApiUrl(startTime, endTime);
-    Serial.printf("Fetching from URL: %s\n", url.c_str());
-    
-    if (!http.begin(*client, url)) {
-        Serial.println("HTTP begin failed");
-        return false;
+    String query = buildGraphQLQuery(startTime, endTime);
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.printf("GraphQL query: %s\n", query.c_str());
     }
     
-    Serial.println("Starting HTTP GET...");
-    int httpCode = http.GET();
+    if (!http.begin(*client, TIDE_API_ENDPOINT)) {
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.println("HTTP begin failed");
+        }
+        return false;
+    }
+
+    http.addHeader("Content-Type", "application/json");
+    
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.println("Starting HTTP POST...");
+    }
+    int httpCode = http.POST(query);
 
     if (httpCode != HTTP_CODE_OK) {
-        Serial.printf("HTTP GET failed, error: %s\n", http.errorToString(httpCode).c_str());
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.printf("HTTP POST failed, error: %s\n", http.errorToString(httpCode).c_str());
+        }
         http.end();
         return false;
     }
 
-    Serial.println("Reading response...");
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.println("Reading response...");
+    }
     String payload = http.getString();
     http.end();
 
     if (payload.length() == 0) {
-        Serial.println("Empty response received");
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.println("Empty response received");
+        }
         return false;
     }
 
-    Serial.println("Parsing JSON...");
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.printf("Response length: %d\n", payload.length());
+        Serial.printf("Response: %s\n", payload.c_str());
+        Serial.println("Parsing JSON...");
+    }
     JSONVar doc = JSON.parse(payload);
     if (JSON.typeof(doc) == "undefined") {
-        Serial.println("JSON parsing failed");
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.println("JSON parsing failed");
+        }
         return false;
     }
 
+    // Navigate through GraphQL response structure
+    if (!doc.hasOwnProperty("data") || !doc["data"].hasOwnProperty("tides")) {
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.println("Invalid GraphQL response structure");
+        }
+        return false;
+    }
+
+    JSONVar tides = doc["data"]["tides"];
+
     // Update current tide data
-    Serial.println("Updating tide data...");
-    String typeStr = JSON.stringify(doc["tideType"]);
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.println("Updating tide data...");
+    }
+    String typeStr = JSON.stringify(tides["tideType"]);
     if (typeStr.length() > 2) {
         tideData.type = typeStr.substring(1, typeStr.length() - 1); // Remove quotes
     } else {
         tideData.type = "UNKNOWN";
     }
     
-    tideData.currentHeight = (double)doc["waterLevel"];
+    tideData.currentHeight = (double)tides["waterLevel"];
     tideData.lastUpdateTime = now;
 
     // Process tide extremes
-    Serial.println("Processing extremes...");
-    if (doc.hasOwnProperty("extremes")) {
-        JSONVar extremes = doc["extremes"];
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.println("Processing extremes...");
+    }
+    if (tides.hasOwnProperty("extremes")) {
+        JSONVar extremes = tides["extremes"];
         processTideExtremes(extremes, tideData, now);
     } else {
-        Serial.println("No extremes data in response");
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.println("No extremes data in response");
+        }
         return false;
     }
 
-    Serial.println("Tide data fetch completed successfully");
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.println("Tide data fetch completed successfully");
+    }
     return true;
 }
 
-String TideService::buildApiUrl(time_t startTime, time_t endTime) {
-    String startEncoded = urlEncodeDateTime(startTime);
-    String endEncoded = urlEncodeDateTime(endTime);
-    
-    return String(TIDE_API_ENDPOINT) + 
-           "?stationId=" + String(TIDE_STATION_ID) + 
-           "&startDateTime=" + startEncoded + 
-           "&endDateTime=" + endEncoded;
-}
-
-String TideService::urlEncodeDateTime(time_t timestamp) {
-    char dateBuff[25];
+String TideService::buildGraphQLQuery(time_t startTime, time_t endTime) {
+    char startBuff[25], endBuff[25];
     struct tm timeinfo;
-    localtime_r(&timestamp, &timeinfo);
-    strftime(dateBuff, sizeof(dateBuff), "%Y-%m-%dT%H:%M:%S", &timeinfo);
     
-    String encoded = String(dateBuff);
-    encoded.replace(":", "%3A");
-    return encoded;
+    localtime_r(&startTime, &timeinfo);
+    strftime(startBuff, sizeof(startBuff), "%Y-%m-%dT%H:%M:%S", &timeinfo);
+    
+    localtime_r(&endTime, &timeinfo);
+    strftime(endBuff, sizeof(endBuff), "%Y-%m-%dT%H:%M:%S", &timeinfo);
+
+    String query = "{"
+                  "\"operationName\": \"GetTides\","
+                  "\"variables\": {"
+                  "\"stationId\": \"" + String(TIDE_STATION_ID) + "\","
+                  "\"startDateTime\": \"" + String(startBuff) + "\","
+                  "\"endDateTime\": \"" + String(endBuff) + "\""
+                  "},"
+                  "\"query\": \"query GetTides($stationId: ID!, $startDateTime: String!, $endDateTime: String!) {\\n"
+                  "  tides(\\n"
+                  "    stationId: $stationId\\n"
+                  "    startDateTime: $startDateTime\\n"
+                  "    endDateTime: $endDateTime\\n"
+                  "  ) {\\n"
+                  "    localTime\\n"
+                  "    waterLevel\\n"
+                  "    tideType\\n"
+                  "    timeZoneOffsetSeconds\\n"
+                  "    extremes {\\n"
+                  "      type\\n"
+                  "      timestamp\\n"
+                  "      height\\n"
+                  "    }\\n"
+                  "  }\\n"
+                  "}\""
+                  "}";
+    return query;
 }
 
 void TideService::processTideExtremes(JSONVar& extremes, TideData& tideData, time_t now) {
@@ -116,7 +177,9 @@ void TideService::processTideExtremes(JSONVar& extremes, TideData& tideData, tim
     int mostRecentPastIndex = -1;
     time_t now_utc = now + GMT_OFFSET_SEC + DAYLIGHT_OFFSET_SEC;
     
-    Serial.printf("Processing %d extremes...\n", (int)extremes.length());
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.printf("Processing %d extremes...\n", (int)extremes.length());
+    }
     
     for (int i = 0; i < extremes.length(); i++) {
         double rawTimestamp = (double)extremes[i]["timestamp"];
@@ -131,7 +194,9 @@ void TideService::processTideExtremes(JSONVar& extremes, TideData& tideData, tim
 
     // Store most recent past extreme
     if (mostRecentPastIndex != -1) {
-        Serial.println("Found recent past extreme");
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.println("Found recent past extreme");
+        }
         time_t timestamp = (time_t)((double)extremes[mostRecentPastIndex]["timestamp"] / 1000);
         tideData.current.timestamp = timestamp;
         tideData.current.height = (double)extremes[mostRecentPastIndex]["height"];
@@ -140,7 +205,9 @@ void TideService::processTideExtremes(JSONVar& extremes, TideData& tideData, tim
     }
 
     // Store future extremes
-    Serial.println("Processing future extremes...");
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.println("Processing future extremes...");
+    }
     tideData.numExtremes = 0;
     for (int i = 0; i < extremes.length() && tideData.numExtremes < MAX_EXTREMES; i++) {
         time_t timestamp = (time_t)((double)extremes[i]["timestamp"] / 1000);
@@ -152,5 +219,7 @@ void TideService::processTideExtremes(JSONVar& extremes, TideData& tideData, tim
             tideData.numExtremes++;
         }
     }
-    Serial.printf("Stored %d future extremes\n", tideData.numExtremes);
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.printf("Stored %d future extremes\n", tideData.numExtremes);
+    }
 }

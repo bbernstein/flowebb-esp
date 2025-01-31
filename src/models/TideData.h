@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // Reduce maximum number of extremes to a more reasonable size
-const int MAX_EXTREMES = 10;  // We really only need the next few extremes
+const int MAX_EXTREMES = 20;  // We really only need the next few extremes
 
 struct TideExtreme {
     time_t timestamp;
@@ -21,4 +21,8 @@ struct TideData {
     TideData();
     bool hasValidFutureExtremes(time_t currentTime) const;
     bool needsUpdate(time_t currentTime) const;
+    time_t getNextUpdateTime() const;
+    
+private:
+    static const unsigned long UPDATE_INTERVAL = 6 * 3600; // 6 hours in seconds
 };

@@ -18,8 +18,33 @@ bool TideData::hasValidFutureExtremes(time_t currentTime) const {
 }
 
 bool TideData::needsUpdate(time_t currentTime) const {
-    const unsigned long SIX_HOURS = 6 * 3600; // 6 hours in seconds
     return numExtremes == 0 ||
            currentTime > extremes[numExtremes - 1].timestamp ||
-           (currentTime - lastUpdateTime) > SIX_HOURS;
+           (currentTime - lastUpdateTime) > UPDATE_INTERVAL;
+}
+
+time_t TideData::getNextUpdateTime() const {
+    time_t nextUpdate;
+    
+    if (numExtremes == 0) {
+        // If no data, update immediately
+        return time(nullptr);
+    }
+    
+    // Get time of next update based on last update time
+    time_t updateBasedOnInterval = lastUpdateTime + UPDATE_INTERVAL;
+    
+    // Get time of next update based on last extreme
+    time_t updateBasedOnExtremes = extremes[numExtremes - 1].timestamp;
+    
+    // Use the earlier of the two times
+    nextUpdate = min(updateBasedOnInterval, updateBasedOnExtremes);
+    
+    // If next update time is in the past, return current time
+    time_t currentTime = time(nullptr);
+    if (nextUpdate <= currentTime) {
+        return currentTime;
+    }
+    
+    return nextUpdate;
 }

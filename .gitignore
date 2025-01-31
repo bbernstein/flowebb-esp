@@ -9,6 +9,7 @@ sdkconfig.old
 .DS_Store
 *.swp
 *.swo
+.claudesync/
 
 # Don't include wifi credentials in repo
 src/config/wifi_credentials.h

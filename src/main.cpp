@@ -68,66 +68,104 @@ void tryInitialDataLoad() {
     }
 }
 
+bool inProgrammingMode() {
+    pinMode(PROG_PIN, INPUT_PULLUP);
+    delay(PROG_MODE_CHECK_DELAY);  // Give pin time to stabilize
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.print("PROG_PIN state: ");
+        Serial.println(digitalRead(PROG_PIN));
+    }
+    return digitalRead(PROG_PIN) == LOW;
+}
+
 void setup() {
-    // Initialize serial communication
-    Serial.begin(115200);
-    delay(1000);
-    Serial.println("ESP32-S3 Tide Tracker Starting...");
+    if (ENABLE_DEBUG_PRINTS) {
+        pinMode(PROG_PIN, OUTPUT);
+        digitalWrite(PROG_PIN, LOW);
+
+        Serial.begin(115200);
+        delay(1000);  // Give USB CDC time to initialize
+        while (!Serial) delay(100);  // Wait for Serial to be ready
+        Serial.println("ESP32-S3 Tide Tracker Starting...");
+    }
     
-    // Initialize components with delays between
+    // Check if we're in programming mode
+    if (inProgrammingMode()) {
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.println("Programming mode detected, disabling deep sleep");
+        }
+        return;
+    }
+    
+    // Initialize components
     PreferencesManager::initialize();
-    delay(100);
-    
-    WiFiService::connect();
-    delay(1000);  // Give WiFi connection time to stabilize
-    
-    TimeService::initialize();
-    delay(1000);  // Give NTP time to sync
-    
     LedController::initialize();
-    delay(100);
     
-    // Load or fetch initial tide data
-    tryInitialDataLoad();
+    // Check if this is a wake from deep sleep
+    esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+    bool needsDataUpdate = true;
+    
+    if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
+        // Try to use saved data first
+        if (PreferencesManager::loadTideData(tideData)) {
+            time_t now = TimeService::getCurrentTime();
+            if (!tideData.needsUpdate(now)) {
+                needsDataUpdate = false;
+            }
+        }
+    }
+    
+    // Only connect to WiFi if we need to update data
+    if (needsDataUpdate) {
+        if (WiFiService::connect()) {
+            TimeService::initialize();
+            tryInitialDataLoad();
+            WiFiService::disconnect();
+        } else {
+            // If WiFi fails, try to use saved data anyway
+            PreferencesManager::loadTideData(tideData);
+        }
+    }
 }
 
 void loop() {
-    // Add try-catch to prevent crashes in main loop
     try {
-        unsigned long currentMillis = millis();
         time_t now = TimeService::getCurrentTime();
-        
-        // Check WiFi connection
-        WiFiService::checkConnection();
-        
-        // Update tide data if needed
-        if (tideData.needsUpdate(now) && 
-            (currentMillis - lastTideCheck >= TIDE_CHECK_INTERVAL)) {
-            
-            Serial.println("Updating tide data...");
-            if (TideService::fetchTideData(tideData)) {
-                Serial.println("Tide data updated successfully");
-                if (PreferencesManager::saveTideData(tideData)) {
-                    Serial.println("Updated data saved successfully");
-                }
-                retryCount = 0;
-            } else {
-                Serial.println("Failed to update tide data");
-                if (++retryCount >= 3) {
-                    Serial.println("Too many failures, rebooting...");
-                    delay(1000);
-                    ESP.restart();
-                }
-            }
-            lastTideCheck = currentMillis;
-        }
         
         // Update LED display
         LedController::updateDisplay(tideData);
         
+        // Check if we need to update tide data
+        if (tideData.needsUpdate(now)) {
+            if (ENABLE_DEBUG_PRINTS) {
+                Serial.println("Tide data needs update, connecting to WiFi...");
+            }
+            
+            if (WiFiService::connect()) {
+                if (TideService::fetchTideData(tideData)) {
+                    if (ENABLE_DEBUG_PRINTS) {
+                        Serial.println("Tide data updated successfully");
+                    }
+                    PreferencesManager::saveTideData(tideData);
+                    retryCount = 0;
+                } else {
+                    if (ENABLE_DEBUG_PRINTS) {
+                        Serial.println("Failed to update tide data");
+                    }
+                    if (++retryCount >= 3) {
+                        ESP.restart();
+                    }
+                }
+                WiFiService::disconnect();
+            }
+        }
+        
+        // Only use a small delay in the loop to allow LED updates
+        delay(10); // Small delay to prevent tight loop
+        
     } catch (...) {
-        Serial.println("Caught exception in main loop");
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.println("Caught exception in main loop");
+        }
     }
-    
-    delay(10); // Basic rate limiting
 }
