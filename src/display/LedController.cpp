@@ -20,10 +20,18 @@ void LedController::initialize() {
 }
 
 void LedController::updateDisplay(const TideData& tideData) {
+    static unsigned long lastUpdateTime = 0;
+    const unsigned long UPDATE_INTERVAL = 1000; // Update LED every second
+    
+    unsigned long currentMillis = millis();
+    if (currentMillis - lastUpdateTime < UPDATE_INTERVAL) {
+        return; // Skip update if not enough time has passed
+    }
+    lastUpdateTime = currentMillis;
+    
     if (tideData.numExtremes == 0) return;
     
     time_t now = TimeService::getCurrentTime();
-    unsigned long currentMillis = millis();
     
     // If we're past all stored extremes, return early
     if (now > tideData.extremes[tideData.numExtremes - 2].timestamp) {
@@ -44,15 +52,15 @@ void LedController::updateDisplay(const TideData& tideData) {
     }
 
     // set nextExtreme to the next extreme after now
-   const  TideExtreme& nextExtreme = tideData.extremes[nextIndex];
+    const TideExtreme& nextExtreme = tideData.extremes[nextIndex];
 
     // Calculate progress and update animation
     float progress = calculateTideProgress(currentExtreme, nextExtreme, now);
     updateWaveAnimation(currentMillis);
     uint32_t color = calculateTideColor(progress, currentExtreme, nextExtreme);
     
-    // Debug output (once per second)
-    if (currentMillis - lastPrintTime >= 10000) {
+    // Debug output (reduced frequency)
+    if (ENABLE_DEBUG_PRINTS && currentMillis - lastPrintTime >= 60000) { // Every minute
         debugPrintStatus(progress, color, nextExtreme);
         lastPrintTime = currentMillis;
     }
@@ -72,7 +80,11 @@ void LedController::updateWaveAnimation(unsigned long currentMillis) {
     static unsigned long waveCycleStartTime = 0;
     static unsigned long waveCycleDuration = 0;
     const uint8_t MIN_BLUE = 0;
-    const uint8_t MAX_BLUE = 32;
+    const uint8_t MAX_BLUE = 16; // Reduced max blue for power saving
+    
+    // Increased wave intervals for power saving
+    const unsigned long MIN_WAVE_INTERVAL = 30000;  // 30 seconds
+    const unsigned long MAX_WAVE_INTERVAL = 60000;  // 60 seconds
 
     if ((currentMillis >= nextWaveTime) || (waveCycleStartTime == 0)) {
         waveCycleDuration = random(MIN_WAVE_INTERVAL, MAX_WAVE_INTERVAL);
@@ -80,11 +92,12 @@ void LedController::updateWaveAnimation(unsigned long currentMillis) {
         nextWaveTime = currentMillis + waveCycleDuration;
     }
     
-    unsigned long cyclePosition = (currentMillis - waveCycleStartTime) % waveCycleDuration;
+    // Calculate wave using optimized floating point
+    uint32_t cyclePosition = (currentMillis - waveCycleStartTime) % waveCycleDuration;
     float cycleProgress = (float)cyclePosition / waveCycleDuration;
-    float waveProgress = sin(cycleProgress * PI);
+    float waveValue = (sin(cycleProgress * 2 * PI) + 1.0f) / 2.0f; // Normalize to 0-1
     
-    currentBlueLevel = MIN_BLUE + (waveProgress * (MAX_BLUE - MIN_BLUE));
+    currentBlueLevel = MIN_BLUE + (uint8_t)(waveValue * (MAX_BLUE - MIN_BLUE));
 }
 
 uint32_t LedController::calculateTideColor(float progress, const TideExtreme& current, const TideExtreme& next) {
@@ -99,12 +112,13 @@ uint32_t LedController::calculateTideColor(float progress, const TideExtreme& cu
 }
 
 void LedController::debugPrintStatus(float progress, uint32_t color, const TideExtreme& nextExtreme) {
+    if (!ENABLE_DEBUG_PRINTS) return;
+    
     time_t now = TimeService::getCurrentTime();
     unsigned long timeToNext = nextExtreme.timestamp - now;
     
-    Serial.printf("Time until %s: %s\n", 
+    Serial.printf("Time until %s: %s - progress: %.2f, Color: %06X\n", 
         (nextExtreme.isHigh ? "HIGH" : "LOW"), 
-        TimeService::formatSecondsToTime(timeToNext).c_str());
-    
-    Serial.printf("Progress: %.2f, Color: %06X\n", progress, color);
+        TimeService::formatSecondsToTime(timeToNext).c_str(),
+        progress, color);
 }

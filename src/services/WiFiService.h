@@ -5,12 +5,14 @@
 
 class WiFiService {
 public:
-    static void connect();
-    static bool isConnected() {
-        return WiFi.status() == WL_CONNECTED;
-    }
-    static void checkConnection();
+    static bool connect();
+    static void disconnect();
+    static bool checkConnection();
+    
+    // Make isConnected accessible but read-only to other classes
+    static bool isConnected() { return _isConnected; }
     
 private:
     static void printWiFiStatus();
+    static bool _isConnected;  // Internal state tracking
 };

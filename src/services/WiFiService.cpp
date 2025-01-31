@@ -5,25 +5,62 @@
  */
 
 #include "WiFiService.h"
+#include "../config/config.h"
 
-void WiFiService::connect() {
-    Serial.printf("Connecting to %s ", WIFI_SSID);
+bool WiFiService::_isConnected = false;
+
+bool WiFiService::connect() {
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.printf("Connecting to %s ", WIFI_SSID);
+    }
+    
+    // Set WiFi to low power mode
+    WiFi.setSleep(true);
     
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    
+    // Use timeout instead of infinite wait
+    unsigned long startAttemptTime = millis();
     while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
+        if (millis() - startAttemptTime > WIFI_TIMEOUT) {
+            if (ENABLE_DEBUG_PRINTS) {
+                Serial.println("\nWiFi connection timeout");
+            }
+            WiFi.disconnect(true);
+            _isConnected = false;
+            return false;
+        }
+        delay(100);
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.print(".");
+        }
     }
     
-    Serial.println(" CONNECTED");
-    printWiFiStatus();
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.println(" CONNECTED");
+        printWiFiStatus();
+    }
+    
+    _isConnected = true;
+    return true;
 }
 
-void WiFiService::checkConnection() {
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("WiFi connection lost. Reconnecting...");
-        connect();
+void WiFiService::disconnect() {
+    WiFi.disconnect(true);
+    _isConnected = false;
+    if (ENABLE_DEBUG_PRINTS) {
+        Serial.println("WiFi disconnected");
     }
+}
+
+bool WiFiService::checkConnection() {
+    if (!_isConnected || WiFi.status() != WL_CONNECTED) {
+        if (ENABLE_DEBUG_PRINTS) {
+            Serial.println("WiFi connection lost. Reconnecting...");
+        }
+        return connect();
+    }
+    return true;
 }
 
 void WiFiService::printWiFiStatus() {
